@@ -1,0 +1,14 @@
+# Tempory build directory
+/build*
+/cmake-build-*
+
+# JetBrains
+/.idea
+
+# Visual Studio
+/.vs
+/out
+/CMakeSettings.json
+
+# VSCode
+/.vscode
