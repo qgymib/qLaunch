@@ -17,6 +17,7 @@ endfunction()
 ###############################################################################
 
 add_executable(${PROJECT_NAME} WIN32
+    "src/list.c"
     "src/main.c"
 )
 target_compile_options(${PROJECT_NAME} PRIVATE -DUNICODE -DWINVER=0x0601)
@@ -28,3 +29,14 @@ if (MINGW)
 elseif(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /utf-8)
 endif ()
+
+###############################################################################
+# third_party dependency
+###############################################################################
+
+# inih
+target_sources(${PROJECT_NAME} PRIVATE
+    third_party/inih/ini.h
+    third_party/inih/ini.c
+)
+target_include_directories(${PROJECT_NAME} PRIVATE third_party/inih)

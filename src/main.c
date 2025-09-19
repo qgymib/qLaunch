@@ -1,6 +1,8 @@
 #include <windows.h>
 #include <commctrl.h>
 #include "config.h"
+#include "list.h"
+#include "ini.h"
 
 #define WIDE2(x) L##x
 #define WIDE(x) WIDE2(x)
@@ -73,12 +75,131 @@ wchar_t* utf8_to_wide(const char* utf8)
     return wstr; // null-terminated
 }
 
+/**
+ * Formats a wide string according to the specified format and arguments.
+ * Similar to snprintf but for wide strings, returns dynamically allocated memory.
+ *
+ * @param[in] format Wide string format specifier
+ * @param[in] ... Variable arguments to be formatted
+ * @return Newly allocated wide string containing the formatted result.
+ *         The caller is responsible for freeing the memory using free().
+ *         Returns NULL if allocation fails or format is invalid.
+ */
+static wchar_t* wcsformat(const wchar_t* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    // First, determine required buffer size
+    va_list args_copy;
+    va_copy(args_copy, args);
+    int len = _vsnwprintf(NULL, 0, format, args_copy);
+    va_end(args_copy);
+
+    if (len < 0)
+    {
+        va_end(args);
+        return NULL;
+    }
+
+    // Allocate buffer (including space for null terminator)
+    wchar_t* buffer = (wchar_t*)malloc((len + 1) * sizeof(wchar_t));
+    if (!buffer)
+    {
+        va_end(args);
+        return NULL;
+    }
+
+    // Format the string
+    _vsnwprintf(buffer, len + 1, format, args);
+    va_end(args);
+
+    return buffer;
+}
+
+/**
+ * @brief Get the absolute path where this executable file located.
+ * @return Unicode path. Use free() when need to release it.
+ */
+static wchar_t* GetExeDirectory(void)
+{
+    wchar_t* path = NULL;
+    DWORD    len = MAX_PATH;
+    DWORD    size;
+
+    do
+    {
+        path = (wchar_t*)realloc(path, len * sizeof(wchar_t));
+        if (!path)
+        {
+            return NULL;
+        }
+        size = GetModuleFileNameW(NULL, path, len);
+        if (size == 0)
+        {
+            free(path);
+            return NULL;
+        }
+        if (size < len)
+        {
+            wchar_t* p = wcsrchr(path, L'\\');
+            if (p)
+            {
+                *p = L'\0';
+            }
+            return path;
+        }
+        len *= 2;
+    } while (len <= 32768); // Max reasonable path length
+
+    free(path);
+    return NULL;
+}
+
+static int OnParseIni(void* user, const char* section, const char* name, const char* value)
+{
+    (void)user;
+    (void)section;
+    (void)name;
+    (void)value;
+    return TRUE;
+}
+
+static void ParseIniConfig()
+{
+    wchar_t* exe_dir = GetExeDirectory();
+    wchar_t* ini_path = wcsformat(L"%s\\%s", exe_dir, WIDE(QLAUNCH_CONFIG_FILE_NAME));
+    free(exe_dir);
+    exe_dir = NULL;
+
+    FILE* ini_file = _wfopen(ini_path, L"rb");
+    free(ini_path);
+    ini_path = NULL;
+    if (ini_file == NULL)
+    {
+        MessageBoxW(NULL, L"Open ini file failed!", L"Error", MB_ICONERROR | MB_OK);
+        exit(EXIT_FAILURE);
+    }
+
+    int ret = ini_parse_file(ini_file, OnParseIni, NULL);
+    fclose(ini_file);
+    ini_file = NULL;
+
+    if (ret < 0)
+    {
+        MessageBoxW(NULL, L"Parse ini file failed!", L"Error", MB_ICONERROR | MB_OK);
+        exit(EXIT_FAILURE);
+    }
+}
+
 static void AddColumnsAndItems(HWND lv)
 {
     LVCOLUMNW lvc;
     lvc.mask = LVCF_WIDTH;
     lvc.cx = 500;
     ListView_InsertColumn(lv, 0, &lvc);
+
+    ParseIniConfig();
 
     LVITEMW item;
     item.mask = LVIF_TEXT;
@@ -152,6 +273,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 static void AtLauncherExit()
 {
     free(App);
+    App = NULL;
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
