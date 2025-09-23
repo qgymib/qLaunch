@@ -40,3 +40,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     third_party/inih/ini.c
 )
 target_include_directories(${PROJECT_NAME} PRIVATE third_party/inih)
+
+set(wxBUILD_SHARED OFF)
+add_subdirectory(third_party/wxWidgets)
+target_link_libraries(${PROJECT_NAME} PUBLIC wx::net wx::core wx::base)
